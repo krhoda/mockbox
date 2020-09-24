@@ -4,7 +4,9 @@
 #[macro_use] extern crate rocket_contrib;
 #[macro_use] extern crate serde_derive;
 
+use std::path::{Path, PathBuf};
 use rocket::http::Method;
+use rocket::response::NamedFile;
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
 use rocket_contrib::json::{JsonValue};
 
@@ -25,8 +27,6 @@ fn make_cors() -> Result<rocket_cors::Cors, rocket_cors::Error> {
         ..Default::default()
     }.to_cors()
 }
-
-
 
 fn file_to_file_rec(f: std::fs::DirEntry) -> Option<FileRec> {
     match f.file_name().into_string() {
@@ -63,6 +63,11 @@ fn hello() -> &'static str {
     "Hello, world"
 }
 
+#[get("/files/<file..>")]
+fn download_file(file: PathBuf) -> Option<NamedFile> {
+    NamedFile::open(Path::new(FILE_DIR).join(file)).ok()
+}
+
 #[get("/files")]
 fn list_files() -> Result<JsonValue, std::io::Error> {
     let entries = std::fs::read_dir(FILE_DIR)?
@@ -71,7 +76,10 @@ fn list_files() -> Result<JsonValue, std::io::Error> {
     })
     .filter(|maybe_rec| {
         match maybe_rec {
-            Ok(_) => true,
+            Ok(x) => match x {
+                Some(_) => true,
+                _ => false
+            },
             _ => false
         }
     })
@@ -84,7 +92,7 @@ fn main() {
     match make_cors() {
         Ok(cors) => {
             rocket::ignite()
-            .mount("/", routes![hello, list_files])
+            .mount("/", routes![hello, download_file, list_files])
             .attach(cors)
             .launch();
         },
