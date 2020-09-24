@@ -4,13 +4,11 @@
 #[macro_use] extern crate rocket_contrib;
 #[macro_use] extern crate serde_derive;
 
-use serde::Deserialize;
 use rocket::http::Method;
-use rocket::response::status;
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
-use rocket_contrib::json::{Json, JsonValue};
+use rocket_contrib::json::{JsonValue};
 
-const file_dir: &str = "./assets";
+const FILE_DIR: &str = "./assets";
 
 // HELPERS:
 fn make_cors() -> Result<rocket_cors::Cors, rocket_cors::Error> {
@@ -43,7 +41,6 @@ fn file_to_file_rec(f: std::fs::DirEntry) -> Option<FileRec> {
                     Some(FileRec{
                         name: name,
                         ext: String::from(ext),
-                        err: "".to_string()
                     })
                 }
                 _ => None
@@ -57,7 +54,6 @@ fn file_to_file_rec(f: std::fs::DirEntry) -> Option<FileRec> {
 #[derive(Serialize, Deserialize)]
 struct FileRec {
     name: String,
-    err: String,
     ext: String
 }
 
@@ -67,29 +63,18 @@ fn hello() -> &'static str {
     "Hello, world"
 }
 
-#[get("/fake_file")]
-fn fake_file() -> JsonValue {
-    let f = json!(FileRec{
-        name: "myfakefile.file".to_string(), 
-        ext: "file".to_string(),
-        err: "".to_string()
-    });
-    f
-}
-
 #[get("/files")]
 fn list_files() -> Result<JsonValue, std::io::Error> {
-    let entries = std::fs::read_dir(file_dir)?
-    .map(|res| res.map(|entry| {
-        match file_to_file_rec(entry) {
-            Some(x) => x,
-            None => FileRec{
-                name: "".to_string(),
-                ext: "".to_string(),
-                err: "Issue reading file at this entry".to_string()
-            }
+    let entries = std::fs::read_dir(FILE_DIR)?
+    .map(|res| {
+        res.map(|entry| file_to_file_rec(entry))
+    })
+    .filter(|maybe_rec| {
+        match maybe_rec {
+            Ok(_) => true,
+            _ => false
         }
-    }))
+    })
     .collect::<Result<Vec<_>, std::io::Error>>()?;
 
     Ok(json!(entries))
@@ -99,7 +84,7 @@ fn main() {
     match make_cors() {
         Ok(cors) => {
             rocket::ignite()
-            .mount("/", routes![hello, fake_file, list_files])
+            .mount("/", routes![hello, list_files])
             .attach(cors)
             .launch();
         },
